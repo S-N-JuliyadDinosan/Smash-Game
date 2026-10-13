@@ -1,0 +1,11 @@
+node_modules/
+dist/
+public/models/*.task
+public/mediapipe/*
+!public/mediapipe/.gitkeep
+test-results/
+playwright-report/
+.env*
+*.log
+
+*.tsbuildinfo
