@@ -23,6 +23,8 @@ import {
   BallCollider,
   useRevoluteJoint,
   useSphericalJoint,
+  useRapier,
+  useBeforePhysicsStep,
   interactionGroups,
   type RapierRigidBody,
 } from "@react-three/rapier";
@@ -36,6 +38,7 @@ import {
   type PartName,
 } from "../avatar/model";
 import type { AvatarData } from "../avatar/types";
+import type { Appearance } from "../avatar/appearance";
 import { TOOLS, useGame, playBonk, type ToolId } from "../store";
 type Bodies = Record<PartName, RefObject<RapierRigidBody>>;
 function anchors(part: Part) {
@@ -196,13 +199,18 @@ function Character({
   playable,
   onMotion,
   onReady,
+  appearance,
+  onRecovering,
 }: {
   data?: AvatarData;
   playable: boolean;
   onMotion: (moving: boolean) => void;
   onReady: () => void;
+  appearance: Appearance;
+  onRecovering: (recovering: boolean) => void;
 }) {
-  const parts = useMemo(() => makeParts(data), [data]);
+  const parts = useMemo(() => makeParts(data, appearance), [data, appearance]);
+  const { rapier } = useRapier();
   const bodies = useMemo(
     () =>
       Object.fromEntries(
@@ -218,10 +226,107 @@ function Character({
     gravityUntil = useRef(0),
     lastHit = useRef(0),
     motionReported = useRef(false);
-  const readyReported=useRef(false);
+  const readyReported = useRef(false);
   useEffect(() => () => disposeParts(parts), [parts]);
+  const recovery = useRef<{
+    elapsed: number;
+    poses: { position: THREE.Vector3; rotation: THREE.Quaternion }[];
+  } | null>(null);
+  const restRotation = useMemo(() => new THREE.Quaternion(), []);
+  const activeTime = useRef(0);
+  useBeforePhysicsStep(() => {
+    if (!active.current) return;
+    activeTime.current += 1 / 60;
+    if (!recovery.current) {
+      const head = bodies.head.current?.translation();
+      const hips = bodies.hips.current?.translation();
+      const rotation = bodies.chest.current?.rotation();
+      const tilted = rotation
+        ? new THREE.Vector3(0, 1, 0).applyQuaternion(
+            new THREE.Quaternion(
+              rotation.x,
+              rotation.y,
+              rotation.z,
+              rotation.w,
+            ),
+          ).y < 0.25
+        : false;
+      const fallen = !!(
+        head &&
+        hips &&
+        (head.y < 1.5 || hips.y < 0.85 || tilted)
+      );
+      // Let the hit read visually, then recover promptly. Airborne launches are capped;
+      // gravity control is allowed to finish its advertised three-second effect.
+      if (
+        performance.now() < gravityUntil.current ||
+        activeTime.current < 0.8 ||
+        (!fallen && activeTime.current < 2.4)
+      )
+        return;
+      const poses = PARTS.map((p) => {
+        const body = bodies[p.name].current;
+        const t = body.translation(),
+          q = body.rotation();
+        const pose = {
+          position: new THREE.Vector3(t.x, t.y, t.z),
+          rotation: new THREE.Quaternion(q.x, q.y, q.z, q.w),
+        };
+        body.setBodyType(rapier.RigidBodyType.KinematicPositionBased, true);
+        body.setGravityScale(0, true);
+        body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+        return pose;
+      });
+      recovery.current = { elapsed: 0, poses };
+      setBalls([]);
+      setBursts([]);
+      onRecovering(true);
+    }
+    const r = recovery.current;
+    r.elapsed += 1 / 60;
+    const t = Math.min(1, r.elapsed / 0.45),
+      ease = t * t * (3 - 2 * t);
+    PARTS.forEach((p, i) => {
+      const body = bodies[p.name].current;
+      body.setNextKinematicTranslation(
+        r.poses[i].position
+          .clone()
+          .lerp(new THREE.Vector3(...p.position), ease),
+      );
+      body.setNextKinematicRotation(
+        r.poses[i].rotation.clone().slerp(restRotation, ease),
+      );
+    });
+    if (t === 1) {
+      PARTS.forEach((p) => {
+        const body = bodies[p.name].current;
+        body.setBodyType(rapier.RigidBodyType.Dynamic, true);
+        body.setTranslation(
+          { x: p.position[0], y: p.position[1], z: p.position[2] },
+          true,
+        );
+        body.setRotation(restRotation, true);
+        body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+        body.setGravityScale(0, true);
+        body.resetForces(true);
+        body.resetTorques(true);
+      });
+      recovery.current = null;
+      active.current = false;
+      activeTime.current = 0;
+      gravityUntil.current = 0;
+      motionReported.current = false;
+      onRecovering(false);
+      onMotion(false);
+    }
+  });
   useFrame(({ clock }) => {
-    if(!readyReported.current){readyReported.current=true;onReady();}
+    if (!readyReported.current) {
+      readyReported.current = true;
+      onReady();
+    }
     if (
       active.current &&
       performance.now() > gravityUntil.current &&
@@ -250,7 +355,8 @@ function Character({
     }
   });
   const hit = (event: ThreeEvent<PointerEvent>, name: PartName) => {
-    if (!playable || event.button !== 0 || event.delta > 5) return;
+    if (!playable || recovery.current || event.button !== 0 || event.delta > 5)
+      return;
     event.stopPropagation();
     if (performance.now() - lastHit.current < 180) return;
     lastHit.current = performance.now();
@@ -258,6 +364,7 @@ function Character({
     const selected = TOOLS.find((t) => t.id === tool)!;
     const body = bodies[name].current;
     if (!body) return;
+    if (!active.current) activeTime.current = 0;
     active.current = true;
     Object.values(bodies).forEach((ref) =>
       ref.current?.setGravityScale(tool === "gravity" ? -0.18 : 1, true),
@@ -417,6 +524,8 @@ export default function Scene({
   view,
   onMotion,
   onReady,
+  appearance,
+  onRecovering,
 }: {
   data?: AvatarData;
   playable: boolean;
@@ -424,6 +533,8 @@ export default function Scene({
   view: string;
   onMotion: (moving: boolean) => void;
   onReady: () => void;
+  appearance: Appearance;
+  onRecovering: (recovering: boolean) => void;
 }) {
   return (
     <SceneBoundary>
@@ -515,6 +626,8 @@ export default function Scene({
               playable={playable}
               onMotion={onMotion}
               onReady={onReady}
+              appearance={appearance}
+              onRecovering={onRecovering}
             />
           </Physics>
         </Suspense>

@@ -33,6 +33,8 @@ import { loadPhoto, cropPhoto } from "./avatar/validation";
 import { localFaceProvider } from "./avatar/provider";
 import type { AvatarData, GenerationProgress } from "./avatar/types";
 import { exportAvatar } from "./avatar/model";
+import Wardrobe from "./avatar/Wardrobe";
+import { DEFAULT_APPEARANCE, type Appearance } from "./avatar/appearance";
 import { TOOLS, useGame } from "./store";
 const Scene = lazy(() => import("./game/Scene"));
 type Stage = "upload" | "processing" | "preview" | "play";
@@ -40,6 +42,10 @@ export default function App() {
   const [stage, setStage] = useState<Stage>("upload"),
     [source, setSource] = useState<HTMLCanvasElement>(),
     [avatar, setAvatar] = useState<AvatarData>();
+  const [appearance, setAppearance] = useState<Appearance>({
+    ...DEFAULT_APPEARANCE,
+  });
+  const [recovering, setRecovering] = useState(false);
   const [zoom, setZoom] = useState(1),
     [offsetX, setOffsetX] = useState(50),
     [offsetY, setOffsetY] = useState(50),
@@ -95,7 +101,13 @@ export default function App() {
         setPrivacy(false);
         return;
       }
-      if (e.target instanceof HTMLInputElement || help || privacy) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLSelectElement ||
+        help ||
+        privacy
+      )
+        return;
       const selected = TOOLS.find((t) => t.key === e.key);
       if (selected) setTool(selected.id);
       if (e.key.toLowerCase() === "r" && stage === "play") resetCharacter();
@@ -105,6 +117,7 @@ export default function App() {
   });
   const resetCharacter = () => {
     setSceneReady(false);
+    setRecovering(false);
     setReset((n) => n + 1);
     setMoving(false);
   };
@@ -158,6 +171,7 @@ export default function App() {
   function deletePhoto() {
     controller.current?.abort();
     setAvatar(undefined);
+    setAppearance({ ...DEFAULT_APPEARANCE });
     setSource(undefined);
     setConsent(false);
     setStage("upload");
@@ -172,7 +186,7 @@ export default function App() {
     setExporting(true);
     setError("");
     try {
-      const blob = await exportAvatar(avatar),
+      const blob = await exportAvatar(avatar, appearance),
         url = URL.createObjectURL(blob),
         a = document.createElement("a");
       a.href = url;
@@ -560,7 +574,15 @@ export default function App() {
             </div>
           </aside>
           <section className="playground">
-            <div className="arena" ref={arena} aria-label="3D playground" aria-busy={!sceneReady}>
+            <div
+              className="arena"
+              ref={arena}
+              aria-label="3D playground"
+              aria-busy={!sceneReady}
+              data-motion={
+                recovering ? "recovering" : moving ? "ragdoll" : "ready"
+              }
+            >
               <div className="arena-top">
                 <span className="arena-label">
                   <i />
@@ -586,7 +608,9 @@ export default function App() {
                     reset={reset}
                     view={view}
                     onMotion={setMoving}
-                    onReady={()=>setSceneReady(true)}
+                    appearance={appearance}
+                    onRecovering={setRecovering}
+                    onReady={() => setSceneReady(true)}
                   />
                 </Suspense>
               </div>
@@ -670,9 +694,11 @@ export default function App() {
               )}
               {stage === "play" && (
                 <div className="play-instruction">
-                  {moving
-                    ? "Beautiful chaos. Press R to go again."
-                    : "Choose a tool. Click your character. Let loose."}
+                  {recovering
+                    ? "Getting back up…"
+                    : moving
+                      ? "Nice hit! Your character will get right back up."
+                      : "Ready! Choose a tool and hit your character."}
                 </div>
               )}
             </div>
@@ -681,7 +707,17 @@ export default function App() {
                 <h3>
                   <Zap size={16} /> Pick your chaos
                 </h3>
-                {stage === "play" && <button className="restart-button" onClick={()=>{resetScore();resetCharacter();}}><RotateCcw size={12}/> Restart game</button>}
+                {stage === "play" && (
+                  <button
+                    className="restart-button"
+                    onClick={() => {
+                      resetScore();
+                      resetCharacter();
+                    }}
+                  >
+                    <RotateCcw size={12} /> Restart game
+                  </button>
+                )}
                 <span>
                   {stage === "play"
                     ? TOOLS.find((t) => t.id === tool)?.hint
@@ -716,6 +752,16 @@ export default function App() {
                 <span>1–9 TO SWITCH TOOLS</span>
               </div>
             </div>
+            {avatar && (stage === "preview" || stage === "play") && (
+              <Wardrobe
+                appearance={appearance}
+                photoHair={avatar.hair}
+                onChange={(next) => {
+                  setAppearance(next);
+                  resetCharacter();
+                }}
+              />
+            )}
           </section>
         </div>
         <section className="how-strip">
@@ -827,7 +873,10 @@ export default function App() {
                 <p>
                   Drag to orbit, pinch or scroll to zoom. Use keys <b>1–9</b>{" "}
                   for tools and <b>R</b> to reset the character. Sound is off
-                  until you enable it. The gravity tool lasts three seconds.
+                  until you enable it. The character gets back up automatically
+                  after a hit. Use the wardrobe below the arena to change
+                  outfits, hairstyles, and colors. The gravity tool lasts three
+                  seconds.
                 </p>
                 <p>
                   Everything is cartoon slapstick. The stunt double is a

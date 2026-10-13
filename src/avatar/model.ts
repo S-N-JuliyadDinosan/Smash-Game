@@ -2,6 +2,8 @@ import * as THREE from "three";
 import Delaunator from "delaunator";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 import type { AvatarData } from "./types";
+import { DEFAULT_APPEARANCE, OUTFITS, type Appearance } from "./appearance";
+import { addHair, addClothing } from "./wardrobeGeometry";
 export type PartName =
   | "hips"
   | "chest"
@@ -149,12 +151,16 @@ function sphere(
   group.add(mesh);
   return mesh;
 }
-export function makeParts(data?: AvatarData) {
+export function makeParts(
+  data?: AvatarData,
+  appearance: Appearance = DEFAULT_APPEARANCE,
+) {
+  const outfit = OUTFITS.find((o) => o.id === appearance.outfit)!;
   const result = {} as Record<PartName, THREE.Group>;
-  const purple = material("#8c6bef"),
-    dark = material("#33323e"),
+  const purple = material(appearance.outfitColor || outfit.top),
+    dark = material(outfit.bottom),
     skin = material(data?.skin || "#c5b4f0"),
-    lime = material("#d5ff70");
+    lime = material(outfit.accent);
   for (const part of PARTS) {
     const group = new THREE.Group();
     group.name = part.name;
@@ -162,12 +168,7 @@ export function makeParts(data?: AvatarData) {
     if (part.name === "head") {
       sphere(group, [0.325, 0.43, 0.3], skin, [0, 0, -0.13]);
       sphere(group, [0.12, 0.17, 0.12], skin, [0, -0.43, -0.02]);
-      sphere(
-        group,
-        [0.346, 0.18, 0.3],
-        material(data?.hair || "#62507b"),
-        [0, 0.34, -0.14],
-      );
+      addHair(group, appearance, data?.hair || "#62507b");
       sphere(group, [0.055, 0.105, 0.06], skin, [-0.335, -0.015, -0.03]);
       sphere(group, [0.055, 0.105, 0.06], skin, [0.335, -0.015, -0.03]);
       if (data) {
@@ -199,26 +200,24 @@ export function makeParts(data?: AvatarData) {
         isHand = /forearm/.test(part.name);
       const mesh = new THREE.Mesh(
         new THREE.CapsuleGeometry(w / 2, Math.max(0.01, h - w), 5, 12),
-        isLeg ? dark : purple,
+        (isHand &&
+          ["tee", "shorts", "dress", "gown", "sari", "skirt"].includes(
+            outfit.shape,
+          )) ||
+        (/upperArm/.test(part.name) &&
+          ["dress", "gown"].includes(outfit.shape)) ||
+        (/shin/.test(part.name) &&
+          ["shorts", "skirt", "dress"].includes(outfit.shape))
+          ? skin
+          : isLeg
+            ? dark
+            : purple,
       );
       mesh.scale.z = d / w;
       mesh.scale.y = h / Math.max(h, w + 0.01);
       mesh.castShadow = true;
       group.add(mesh);
-      if (part.name === "chest") {
-        const patch = new THREE.Mesh(
-          new THREE.BoxGeometry(0.22, 0.1, 0.018),
-          lime,
-        );
-        patch.position.set(-0.14, 0.1, 0.2);
-        group.add(patch);
-        const zipper = new THREE.Mesh(
-          new THREE.BoxGeometry(0.015, 0.48, 0.018),
-          dark,
-        );
-        zipper.position.z = 0.202;
-        group.add(zipper);
-      }
+      addClothing(group, part.name, appearance);
       if (isHand) sphere(group, [0.13, 0.14, 0.13], skin, [0, -h / 2, 0.02]);
       if (/shin/.test(part.name))
         sphere(group, [0.15, 0.12, 0.26], lime, [0, -h / 2, 0.1]);
@@ -253,10 +252,14 @@ export function disposeParts(parts: Record<PartName, THREE.Group>) {
     m.dispose();
   });
 }
-export async function exportAvatar(data: AvatarData) {
-  const parts = makeParts(data),
+export async function exportAvatar(
+  data: AvatarData,
+  appearance: Appearance = DEFAULT_APPEARANCE,
+) {
+  const parts = makeParts(data, appearance),
     root = new THREE.Group();
   root.name = "Photo Smash personalized avatar";
+  root.userData.appearance = { ...appearance };
   const bones = PARTS.map((p) => {
     const b = new THREE.Bone();
     b.name = p.name;

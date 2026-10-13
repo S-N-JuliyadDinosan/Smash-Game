@@ -1385,4 +1385,115 @@ footer button {
   }
 }
 
-.restart-button{display:flex;align-items:center;gap:5px;font-size:9px;color:#b8a5d5;margin-left:auto;margin-right:16px;}
+.restart-button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  color: #b8a5d5;
+  margin-left: auto;
+  margin-right: 16px;
+}
+
+.wardrobe-panel {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid #39343f;
+  border-radius: 10px;
+  background: #202027;
+}
+.wardrobe-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.wardrobe-heading h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.wardrobe-heading p {
+  font-size: 10px;
+  color: #a59aae;
+  line-height: 1.7;
+  margin-top: 5px;
+}
+.wardrobe-heading button,
+.wardrobe-color button {
+  font-size: 10px;
+  color: #c3acea;
+  white-space: nowrap;
+}
+.wardrobe-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+.wardrobe-fields > label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 10px;
+  color: #b9aec8;
+}
+.wardrobe-fields select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #554661;
+  border-radius: 6px;
+  background: #292530;
+  color: #f0e9fa;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.wardrobe-color {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.wardrobe-color label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: #c2b7ce;
+}
+.wardrobe-color input {
+  width: 30px;
+  height: 30px;
+  padding: 2px;
+  border: 1px solid #554661;
+  border-radius: 5px;
+  background: #292530;
+  cursor: pointer;
+}
+.wardrobe-note {
+  font-size: 9px;
+  line-height: 1.7;
+  color: #9b8fa7;
+  margin-top: 15px;
+}
+@media (max-width: 900px) and (min-width: 641px) {
+  .wardrobe-fields {
+    grid-template-columns: 1fr;
+  }
+  .wardrobe-heading {
+    align-items: flex-start;
+  }
+}
+@media (max-width: 400px) {
+  .wardrobe-panel {
+    padding: 15px;
+  }
+  .wardrobe-color {
+    gap: 4px;
+  }
+  .wardrobe-color label,
+  .wardrobe-color button {
+    font-size: 9px;
+  }
+}

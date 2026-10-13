@@ -63,13 +63,13 @@ test("real portrait → landmark reconstruction → GLB → physics → deletion
   expect(gltf.animations[0].name).toBe("Gentle idle");
   await page.getByRole("button", { name: "Let’s make some chaos" }).click();
   await expect(page.getByTestId("score")).toHaveText("00000");
-  await expect(page.locator(".arena")).toHaveAttribute("aria-busy","false");
+  await expect(page.locator(".arena")).toHaveAttribute("aria-busy", "false");
   const canvas = page.locator(".arena canvas");
   const box = (await canvas.boundingBox())!;
   await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.42);
   await expect(page.getByTestId("score")).not.toHaveText("00000");
   await expect(
-    page.getByText("Beautiful chaos. Press R to go again."),
+    page.getByText("Nice hit! Your character will get right back up."),
   ).toBeVisible();
   await page.waitForTimeout(900);
   await page.screenshot({
@@ -77,7 +77,7 @@ test("real portrait → landmark reconstruction → GLB → physics → deletion
     fullPage: true,
   });
   await page.getByRole("button", { name: "Reset character" }).click();
-    await expect(page.locator(".arena")).toHaveAttribute("aria-busy","false");
+  await expect(page.locator(".arena")).toHaveAttribute("aria-busy", "false");
   await page.evaluate(
     () =>
       new Promise((resolve) =>
@@ -85,7 +85,7 @@ test("real portrait → landmark reconstruction → GLB → physics → deletion
       ),
   );
   await expect(
-    page.getByText("Choose a tool. Click your character. Let loose."),
+    page.getByText("Ready! Choose a tool and hit your character."),
   ).toBeVisible();
   await page.keyboard.press("5");
   await expect(
@@ -96,7 +96,7 @@ test("real portrait → landmark reconstruction → GLB → physics → deletion
   await page.keyboard.press("r");
   for (const key of ["2", "3", "4", "6", "7", "8", "9"]) {
     await page.getByRole("button", { name: "Reset character" }).click();
-    await expect(page.locator(".arena")).toHaveAttribute("aria-busy","false");
+    await expect(page.locator(".arena")).toHaveAttribute("aria-busy", "false");
     await page.evaluate(
       () =>
         new Promise((resolve) =>
@@ -110,7 +110,7 @@ test("real portrait → landmark reconstruction → GLB → physics → deletion
     await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.42);
     await expect(page.getByTestId("score")).not.toHaveText(before);
     await expect(
-      page.getByText("Beautiful chaos. Press R to go again."),
+      page.getByText("Nice hit! Your character will get right back up."),
     ).toBeVisible();
   }
   await page.getByRole("button", { name: "Restart game" }).click();
@@ -135,19 +135,20 @@ test("real portrait → landmark reconstruction → GLB → physics → deletion
   await page.getByRole("button", { name: "Export GLB" }).click();
   const nextFile = await readFile((await (await nextDownload).path())!);
   expect(nextFile.equals(file)).toBe(false);
-  await page.screenshot({path:testInfo.outputPath("second-person.png"),fullPage:true});
+  await page.screenshot({
+    path: testInfo.outputPath("second-person.png"),
+    fullPage: true,
+  });
   expect(outgoingPhotos).toEqual([]);
   expect(failures).toEqual([]);
 });
 test("invalid files and no-face images fail honestly", async ({ page }) => {
   await page.goto("/");
-  await page
-    .getByLabel("Upload a portrait")
-    .setInputFiles({
-      name: "fake.jpg",
-      mimeType: "image/jpeg",
-      buffer: Buffer.from("not an image"),
-    });
+  await page.getByLabel("Upload a portrait").setInputFiles({
+    name: "fake.jpg",
+    mimeType: "image/jpeg",
+    buffer: Buffer.from("not an image"),
+  });
   await expect(page.getByRole("alert")).toContainText("real JPEG");
   const blank = await page.evaluate(() => {
     const c = document.createElement("canvas");
@@ -155,13 +156,11 @@ test("invalid files and no-face images fail honestly", async ({ page }) => {
     c.getContext("2d")!.fillRect(0, 0, 512, 512);
     return c.toDataURL("image/png").split(",")[1];
   });
-  await page
-    .getByLabel("Upload a portrait")
-    .setInputFiles({
-      name: "blank.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(blank, "base64"),
-    });
+  await page.getByLabel("Upload a portrait").setInputFiles({
+    name: "blank.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(blank, "base64"),
+  });
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Generate my character" }).click();
   await expect(page.getByRole("alert")).toContainText("No clear face", {
